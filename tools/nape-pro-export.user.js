@@ -213,7 +213,7 @@
       }
       await sendCmd([0xa7, 0x22, data.dpi.currentLevel]);
     }
-    // combos (index 0〜29: SET=0x27 / DEL=0x2e)
+    // combos (index 0〜29: SET=0x27 / DEL=0x2e)。既存全削除→先頭から順に追加→読み戻し検証。
     if (Array.isArray(data.combos)) {
       const readCombo = (index) => new Promise((resolve) => {
         const buf = new Uint8Array(32).fill(0); buf[0] = 0xa7; buf[1] = 0x28; buf[2] = index;
@@ -225,12 +225,22 @@
       });
       let nOld = 0;
       for (let i = 0; i < 30; i++) { const r = await readCombo(i); if (!r || r[6] === 0) break; nOld++; }
+      for (let i = nOld - 1; i >= 0; i--) await sendCmd([0xa7, 0x2e, i]);
       for (let i = 0; i < data.combos.length && i < 30; i++) {
         const c = data.combos[i]; const to = c.timeout != null ? c.timeout : 200;
         await sendCmd([0xa7, 0x27, i, to & 0xff, (to >> 8) & 0xff, c.layer, c.cols,
           c.tap & 0xff, (c.tap >> 8) & 0xff, c.held & 0xff, (c.held >> 8) & 0xff]);
       }
-      for (let i = nOld - 1; i >= data.combos.length; i--) await sendCmd([0xa7, 0x2e, i]);
+      const after = [];
+      for (let i = 0; i < 30; i++) { const r = await readCombo(i); if (!r || r[6] === 0) break; after.push(r); }
+      const bad = [];
+      for (let i = 0; i < data.combos.length; i++) {
+        const r = after[i], c = data.combos[i];
+        if (!r) { bad.push(`#${i}未作成`); continue; }
+        if (r[6] !== c.cols || (r[7] | (r[8] << 8)) !== c.tap || (r[9] | (r[10] << 8)) !== c.held) bad.push(`#${i}不一致`);
+      }
+      if (bad.length) console.warn(`combos 読み戻し不一致（${after.length}/${data.combos.length}）:`, bad);
+      else console.log(`combos 完了・検証OK（${after.length}件）`);
     }
     // tap-hold ((layer,col): SET=0x25 / DEL=0x2f)
     if (Array.isArray(data.tapholds)) {

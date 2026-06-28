@@ -115,10 +115,10 @@
   }
 
   // ---- 4a. combos 書き込み (index 0〜29) ----
-  // SET_COMBOS=0x27, GET=0x28, DEL=0x2e。新データを 0..N-1 に上書きし、余剰は降順に削除。
+  // SET_COMBOS=0x27, GET=0x28, DEL=0x2e。
+  // 方式: 既存を全削除 → 先頭から順に SET（各 SET が末尾＝index==現在件数 に当たり、確実に追加される）。
   if (Array.isArray(data.combos)) {
     console.log('combos を書き込み中...');
-    // 無応答 or cols==0 で打ち切る GET（現在の登録件数 N_old を数える）
     const readCombo = (index) => new Promise((resolve) => {
       const buf = new Uint8Array(32).fill(0); buf[0] = 0xa7; buf[1] = 0x28; buf[2] = index;
       const h = (e) => { const r = new Uint8Array(e.data.buffer);
@@ -127,19 +127,28 @@
       setTimeout(() => { dev.removeEventListener('inputreport', h); resolve(null); }, 500);
       dev.sendReport(0, buf).catch(() => resolve(null));
     });
+    // 既存件数を数えて降順に全削除
     let nOld = 0;
     for (let i = 0; i < 30; i++) { const r = await readCombo(i); if (!r || r[6] === 0) break; nOld++; }
+    for (let i = nOld - 1; i >= 0; i--) await sendCmd([0xa7, 0x2e, i]);
+    // 0..N-1 を順に追加
     for (let i = 0; i < data.combos.length && i < 30; i++) {
       const c = data.combos[i];
       const to = c.timeout != null ? c.timeout : 200;
       await sendCmd([0xa7, 0x27, i, to & 0xff, (to >> 8) & 0xff, c.layer, c.cols,
         c.tap & 0xff, (c.tap >> 8) & 0xff, c.held & 0xff, (c.held >> 8) & 0xff]);
     }
-    // 余剰エントリを高インデックスから降順に削除（削除でシフトダウンするため）。
-    for (let i = nOld - 1; i >= data.combos.length; i--) {
-      await sendCmd([0xa7, 0x2e, i]);
+    // 読み戻し検証
+    const after = [];
+    for (let i = 0; i < 30; i++) { const r = await readCombo(i); if (!r || r[6] === 0) break; after.push(r); }
+    const bad = [];
+    for (let i = 0; i < data.combos.length; i++) {
+      const r = after[i], c = data.combos[i];
+      if (!r) { bad.push(`#${i} 未作成`); continue; }
+      if (r[6] !== c.cols || (r[7] | (r[8] << 8)) !== c.tap || (r[9] | (r[10] << 8)) !== c.held) bad.push(`#${i} 不一致`);
     }
-    console.log(`  combos 完了（${data.combos.length}件）`);
+    if (bad.length) console.warn(`  ⚠️ combos 読み戻し不一致（${after.length}/${data.combos.length}件）:`, bad);
+    else console.log(`  combos 完了・検証OK（${after.length}件）`);
   }
 
   // ---- 4b. tap-hold 書き込み ((layer,col) アドレス) ----
