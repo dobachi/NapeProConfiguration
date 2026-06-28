@@ -89,15 +89,16 @@
     for (let layer = 0; layer < layerCount; layer++) {
       layerOri.push((await sendCmd([0xa7, 0x38, layer]))[2]);
     }
-    // 参考情報（読み取りのみ・インポート未対応）
+    // デバイス設定（インポートで復元される）
     const u16le = (a, i) => (a[i + 1] << 8) | a[i];
     const alwaysRaw = await sendCmd([0xa7, 0x33]);
     const sleepRaw  = await sendCmd([0xa7, 0x0b]);
     const pollRaw   = await sendCmd([0xa7, 0x0d]);
     const batRaw    = await sendCmd([0xa7, 0x31]);
+    const pollIndex = pollRaw[6];
 
     const exportData = {
-      version: '1.1',
+      version: '1.2',
       device: 'Keychron Nape Pro',
       exportDate: new Date().toISOString(),
       firmware,
@@ -113,14 +114,16 @@
         tapholds: Array.from(await sendCmd([0xa7, 0x26])),
         profile:  Array.from(await sendCmd([0xa7, 0x2c]))
       },
-      deviceInfo: {
-        alwaysGesture: !!(alwaysRaw[2] & 0x01),
-        alwaysScroll:  !!(alwaysRaw[2] & 0x02),
-        sleepTimerSec: [u16le(sleepRaw, 3), u16le(sleepRaw, 5)],
-        pollingRateHz: [u16le(pollRaw, 3), u16le(pollRaw, 5)],
-        batteryPercent: batRaw[2],
-        charging: batRaw[3] === 1
-      }
+      deviceSettings: {
+        alwaysGesture: alwaysRaw[2],
+        alwaysScroll:  alwaysRaw[3],
+        sleepBacklightSec:  u16le(sleepRaw, 3),
+        sleepSec:           u16le(sleepRaw, 5),
+        sleepMagnetScanSec: u16le(sleepRaw, 7),
+        pollingIndex: pollIndex,
+        pollingRateHz: pollIndex != null ? (8000 >> pollIndex) : null
+      },
+      battery: { percent: batRaw[2], charging: batRaw[3] === 1 }
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -210,6 +213,20 @@
           if (got !== per[layer]) bad.push(`Layer${layer}:${per[layer]}→${got}`);
         }
         if (bad.length) console.warn('回転角の読み戻し不一致:', bad);
+      }
+    }
+    // デバイス設定 (常時モード SET=0x32 / スリープ SET=0x0c / ポーリング SET=0x0e)
+    const ds = data.deviceSettings;
+    if (ds) {
+      if (ds.alwaysGesture != null || ds.alwaysScroll != null) {
+        await sendCmd([0xa7, 0x32, ds.alwaysGesture || 0, ds.alwaysScroll || 0]);
+      }
+      if (ds.sleepSec != null) {
+        const u16 = (v) => [v & 0xff, (v >> 8) & 0xff];
+        await sendCmd([0xa7, 0x0c, ...u16(ds.sleepBacklightSec || 0), ...u16(ds.sleepSec || 0), ...u16(ds.sleepMagnetScanSec || 0)]);
+      }
+      if (ds.pollingIndex != null) {
+        await sendCmd([0xa7, 0x0e, ds.pollingIndex, ds.pollingIndex]);
       }
     }
     alert('インポート完了！\nファイル: ' + file.name);

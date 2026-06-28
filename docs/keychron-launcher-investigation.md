@@ -8,6 +8,8 @@ WebHID API を直接叩くブラウザコンソール用スクリプトで設定
 > 詳細は [`../tools/README.md`](../tools/README.md) の免責事項を参照。
 
 > 調査は Claude (Sonnet 4.6) を用いて実施。実機での動作確認済み（後述の「実測データ」参照）。
+>
+> 📘 確定したコマンド仕様の体系版は [`nape-pro-hid-protocol.md`](nape-pro-hid-protocol.md) を参照（本ドキュメントは初期調査の経緯）。
 
 ## アプリケーション構成
 

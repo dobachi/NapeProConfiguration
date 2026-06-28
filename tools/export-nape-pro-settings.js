@@ -78,15 +78,17 @@
     layerOri.push((await sendCmd([0xa7, 0x38, layer]))[2]);
   }
 
-  // 参考情報（読み取りのみ。インポートでは復元しない）。
+  // デバイス設定（インポートで復元される）。応答バイト位置はソース解析で確定。
   const u16le = (a, i) => (a[i + 1] << 8) | a[i];
-  const alwaysRaw = await sendCmd([0xa7, 0x33]); // 常時ジェスチャー/スクロール
-  const sleepRaw  = await sendCmd([0xa7, 0x0b]); // スリープタイマー(秒, LE u16×2)
-  const pollRaw   = await sendCmd([0xa7, 0x0d]); // ポーリングレート(Hz, LE u16×2)
-  const batRaw    = await sendCmd([0xa7, 0x31]); // バッテリー
+  const alwaysRaw = await sendCmd([0xa7, 0x33]); // 常時モード: byte[2]=gesture, byte[3]=scroll
+  const sleepRaw  = await sendCmd([0xa7, 0x0b]); // スリープ: [3,4]backlight [5,6]sleep [7,8]magnetScan (各 LE u16, 秒)
+  const pollRaw   = await sendCmd([0xa7, 0x0d]); // ポーリング: byte[6]=index (Hz = 8000 >> index)
+  const batRaw    = await sendCmd([0xa7, 0x31]); // バッテリー: byte[2]=%, byte[3]=充電中
+
+  const pollIndex = pollRaw[6];
 
   const exportData = {
-    version: '1.1',
+    version: '1.2',
     device: 'Keychron Nape Pro',
     exportDate: new Date().toISOString(),
     firmware,
@@ -103,15 +105,18 @@
       tapholds: Array.from(await sendCmd([0xa7, 0x26])),
       profile:  Array.from(await sendCmd([0xa7, 0x2c]))
     },
-    // 参考情報（インポート非対応）。SET コマンド未確定のため復元しない。
-    deviceInfo: {
-      alwaysGesture: !!(alwaysRaw[2] & 0x01),
-      alwaysScroll:  !!(alwaysRaw[2] & 0x02),
-      sleepTimerSec: [u16le(sleepRaw, 3), u16le(sleepRaw, 5)],
-      pollingRateHz: [u16le(pollRaw, 3), u16le(pollRaw, 5)],
-      batteryPercent: batRaw[2],
-      charging: batRaw[3] === 1
-    }
+    // デバイス設定（インポートで復元される）。
+    deviceSettings: {
+      alwaysGesture: alwaysRaw[2],   // 0/1
+      alwaysScroll:  alwaysRaw[3],   // 0/1
+      sleepBacklightSec:  u16le(sleepRaw, 3),
+      sleepSec:           u16le(sleepRaw, 5),
+      sleepMagnetScanSec: u16le(sleepRaw, 7),
+      pollingIndex: pollIndex,       // SET はこの index を送る
+      pollingRateHz: pollIndex != null ? (8000 >> pollIndex) : null
+    },
+    // 参考情報（インポート対象外）。
+    battery: { percent: batRaw[2], charging: batRaw[3] === 1 }
   };
 
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });

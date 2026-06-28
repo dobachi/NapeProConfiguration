@@ -152,9 +152,28 @@
     }
   }
 
-  // 注意: deviceInfo（常時モード/スリープ/ポーリング）は SET コマンド未確定のため未対応。
-  if (data.deviceInfo) {
-    console.log('ℹ️ deviceInfo（常時モード/スリープ/ポーリング）はインポート未対応のためスキップしました。');
+  // ---- 6. デバイス設定 (常時モード / スリープ / ポーリング) 書き込み ----
+  // SET コマンドはソース解析で確定（保存コマンドは不要・送らない）。
+  const ds = data.deviceSettings;
+  if (ds) {
+    console.log('デバイス設定を書き込み中...');
+    // 常時モード: SET_Force_Gesture_Scroll = 0x32。byte[2]=gesture, byte[3]=scroll (各0/1)
+    if (ds.alwaysGesture != null || ds.alwaysScroll != null) {
+      await sendCmd([0xa7, 0x32, ds.alwaysGesture || 0, ds.alwaysScroll || 0]);
+    }
+    // スリープ: Set_Sleep = 0x0c。[backlight, sleep, magnetScan] 各 LE u16 (秒)
+    if (ds.sleepSec != null) {
+      const u16 = (v) => [v & 0xff, (v >> 8) & 0xff];
+      await sendCmd([0xa7, 0x0c,
+        ...u16(ds.sleepBacklightSec || 0),
+        ...u16(ds.sleepSec || 0),
+        ...u16(ds.sleepMagnetScanSec || 0)]);
+    }
+    // ポーリング: SET = 0x0e。byte[2]=byte[3]=index (Hz = 8000 >> index)
+    if (ds.pollingIndex != null) {
+      await sendCmd([0xa7, 0x0e, ds.pollingIndex, ds.pollingIndex]);
+    }
+    console.log('  デバイス設定 完了');
   }
 
   console.log('✅ インポート完了！ Launcherの画面を確認してください。');
