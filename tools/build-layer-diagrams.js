@@ -33,10 +33,18 @@ function decode(code) {
 // 列 (Col0-6) -> 物理ボタン
 const COL = { b03: 0, b04: 1, b01: 2, b02: 3, m1: 4, m2: 5, x: 6 };
 
+// 役割は device VIA index 基準（内容ベース）。
 const ROLES = {
-  0: '横置き・基本ポインタ', 1: '横置き・フルマウス', 2: '横置き・設定/ジェスチャ',
-  3: 'プレゼン縦持ち', 4: '横置き・ジェスチャ付き (4〜8 共通)'
+  0: 'ベース', 1: 'フルマウス', 2: '設定/ジェスチャ',
+  3: 'プレゼン', 4: '基本ポインタ＋ジェスチャ'
 };
+
+// device VIA index → 見出しラベル。Launcher 表示は device index を 1 ずらす（index0 は base で非表示）。
+function layerTitle(i) {
+  if (i === 0) return 'Base（device index 0 / Launcher 非表示）';
+  if (i === 4) return 'Launcher Layer 3〜7（device index 4〜8）';
+  return `Launcher Layer ${i - 1}（device index ${i}）`;
+}
 
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -46,13 +54,31 @@ function box(x, y, w, h, title, label) {
   <text x="${x + w / 2}" y="${y + h / 2 + 12}" fill="#fff" font-size="15" text-anchor="middle">${esc(label)}</text>`;
 }
 
+// 回転角に応じた「上方向」マーカー。0°=画面上、時計回りに回転（90°=右,180°=下,270°=左）。
+function upArrow(oriRaw) {
+  if (typeof oriRaw !== 'number') return '';
+  const cx = 500, cy = 195, len = 96;
+  const rad = oriRaw * 45 * Math.PI / 180;
+  const tx = cx + len * Math.sin(rad);
+  const ty = cy - len * Math.cos(rad);
+  const lx = cx + (len + 16) * Math.sin(rad);
+  const ly = cy - (len + 16) * Math.cos(rad);
+  return `<line x1="${cx}" y1="${cy}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="#9cf" stroke-width="4" marker-end="url(#up)"/>
+  <text x="${lx.toFixed(1)}" y="${(ly + 5).toFixed(1)}" fill="#9cf" font-size="14" font-weight="bold" text-anchor="middle">上</text>`;
+}
+
 function svgForLayer(layerIndex, keys, enc, oriRaw) {
   const role = ROLES[layerIndex] || '';
   const ccw = decode(enc.ccw), cw = decode(enc.cw);
-  const title = layerIndex === 4 ? 'Layer 4〜8' : 'Layer ' + layerIndex;
+  const title = layerTitle(layerIndex);
   const oriText = (typeof oriRaw === 'number') ? `回転角: ${oriRaw * 45}°` : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360" font-family="sans-serif">
+  <defs>
+    <marker id="up" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9cf"/>
+    </marker>
+  </defs>
   <rect width="900" height="360" fill="#1b1b1b"/>
   <text x="30" y="38" fill="#fff" font-size="20" font-weight="bold">${esc(title)} — ${esc(role)}</text>
   <text x="870" y="38" fill="#9cf" font-size="15" text-anchor="end">${esc(oriText)}</text>
@@ -64,6 +90,7 @@ function svgForLayer(layerIndex, keys, enc, oriRaw) {
   ${box(300, 230, 110, 70, '02', decode(keys[COL.b02]))}
   <circle cx="500" cy="195" r="70" fill="#333" stroke="#666" stroke-width="2"/>
   <text x="500" y="200" fill="#777" font-size="13" text-anchor="middle">ball</text>
+  ${upArrow(oriRaw)}
   ${box(560, 90, 110, 70, '03', decode(keys[COL.b03]))}
   ${box(560, 230, 110, 70, '04', decode(keys[COL.b04]))}
 
