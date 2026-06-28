@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360" font-family="sans-serif">
+  <rect width="900" height="360" fill="#1b1b1b"/>
+  <text x="30" y="38" fill="#fff" font-size="20" font-weight="bold">Layer 2 — 横置き・設定/ジェスチャ</text>
+
+    <rect x="25" y="110" width="150" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
+  <text x="100" y="128" fill="#888" font-size="12" text-anchor="middle">M1</text>
+  <text x="100" y="157" fill="#fff" font-size="15" text-anchor="middle">独自(0x7E25)</text>
+    <rect x="25" y="200" width="150" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
+  <text x="100" y="218" fill="#888" font-size="12" text-anchor="middle">M2</text>
+  <text x="100" y="247" fill="#fff" font-size="15" text-anchor="middle">独自(0x7E26)</text>
+
+    <rect x="300" y="90" width="110" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
+  <text x="355" y="108" fill="#888" font-size="12" text-anchor="middle">01</text>
+  <text x="355" y="137" fill="#fff" font-size="15" text-anchor="middle">左Ctrl</text>
+    <rect x="300" y="230" width="110" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
+  <text x="355" y="248" fill="#888" font-size="12" text-anchor="middle">02</text>
+  <text x="355" y="277" fill="#fff" font-size="15" text-anchor="middle">左クリック</text>
+  <circle cx="500" cy="195" r="70" fill="#333" stroke="#666" stroke-width="2"/>
+  <text x="500" y="200" fill="#777" font-size="13" text-anchor="middle">ball</text>
+    <rect x="560" y="90" width="110" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
+  <text x="615" y="108" fill="#888" font-size="12" text-anchor="middle">03</text>
+  <text x="615" y="137" fill="#fff" font-size="15" text-anchor="middle">左Shift</text>
+    <rect x="560" y="230" width="110" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
+  <text x="615" y="248" fill="#888" font-size="12" text-anchor="middle">04</text>
+  <text x="615" y="277" fill="#fff" font-size="15" text-anchor="middle">右クリック</text>
+
+  <rect x="710" y="150" width="170" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
+  <text x="795" y="168" fill="#888" font-size="12" text-anchor="middle">ホイール (CW/CCW)</text>
+  <text x="795" y="197" fill="#fff" font-size="13" text-anchor="middle">スクロール↓ / スクロール↑</text>
+
+  <text x="30" y="340" fill="#888" font-size="12">予備ボタン: モード/レイヤ</text>
+</svg>
