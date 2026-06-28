@@ -1,8 +1,9 @@
 {
-  "version": "1.0",
+  "version": "1.2",
   "device": "Keychron Nape Pro",
-  "exportDate": "2026-06-28T11:49:02.303Z",
+  "exportDate": "2026-06-28T13:40:17.203Z",
   "firmware": "010205000000001502026015015033",
+  "launcherVersion": "1.3.8",
   "layerCount": 9,
   "keymap": [
     [
@@ -150,6 +151,20 @@
       }
     ]
   },
+  "orientation": {
+    "global": 2,
+    "perLayer": [
+      0,
+      2,
+      2,
+      4,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
   "rawSettings": {
     "combos": [
       167,
@@ -287,5 +302,18 @@
       0,
       0
     ]
+  },
+  "deviceSettings": {
+    "alwaysGesture": 0,
+    "alwaysScroll": 0,
+    "sleepBacklightSec": 300,
+    "sleepSec": 600,
+    "sleepMagnetScanSec": 0,
+    "pollingIndex": 3,
+    "pollingRateHz": 1000
+  },
+  "battery": {
+    "percent": 100,
+    "charging": true
   }
 }

@@ -46,14 +46,16 @@ function box(x, y, w, h, title, label) {
   <text x="${x + w / 2}" y="${y + h / 2 + 12}" fill="#fff" font-size="15" text-anchor="middle">${esc(label)}</text>`;
 }
 
-function svgForLayer(layerIndex, keys, enc) {
+function svgForLayer(layerIndex, keys, enc, oriRaw) {
   const role = ROLES[layerIndex] || '';
   const ccw = decode(enc.ccw), cw = decode(enc.cw);
   const title = layerIndex === 4 ? 'Layer 4〜8' : 'Layer ' + layerIndex;
+  const oriText = (typeof oriRaw === 'number') ? `回転角: ${oriRaw * 45}°` : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360" font-family="sans-serif">
   <rect width="900" height="360" fill="#1b1b1b"/>
   <text x="30" y="38" fill="#fff" font-size="20" font-weight="bold">${esc(title)} — ${esc(role)}</text>
+  <text x="870" y="38" fill="#9cf" font-size="15" text-anchor="end">${esc(oriText)}</text>
 
   ${box(25, 110, 150, 70, 'M1', decode(keys[COL.m1]))}
   ${box(25, 200, 150, 70, 'M2', decode(keys[COL.m2]))}
@@ -82,8 +84,10 @@ function main() {
 
   // 個別のレイヤ 0〜3 と、4〜8 代表として 4 を出力
   const targets = [0, 1, 2, 3, 4];
+  const perLayerOri = data.orientation && data.orientation.perLayer;
   for (const i of targets) {
-    const svg = svgForLayer(i, data.keymap[i], data.encoders[i]);
+    const oriRaw = perLayerOri ? perLayerOri[i] : undefined;
+    const svg = svgForLayer(i, data.keymap[i], data.encoders[i], oriRaw);
     const out = path.join(outDir, `layer-${i}.svg`);
     fs.writeFileSync(out, svg);
     console.log('generated ' + path.relative(process.cwd(), out));

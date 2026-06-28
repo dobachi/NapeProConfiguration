@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360" font-family="sans-serif">
   <rect width="900" height="360" fill="#1b1b1b"/>
   <text x="30" y="38" fill="#fff" font-size="20" font-weight="bold">Layer 3 — プレゼン縦持ち</text>
+  <text x="870" y="38" fill="#9cf" font-size="15" text-anchor="end">回転角: 180°</text>
 
     <rect x="25" y="110" width="150" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
   <text x="100" y="128" fill="#888" font-size="12" text-anchor="middle">M1</text>
