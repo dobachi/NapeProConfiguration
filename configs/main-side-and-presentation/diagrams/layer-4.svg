@@ -23,8 +23,8 @@
   <text x="355" y="277" fill="#fff" font-size="15" text-anchor="middle">独自(0x7E2C)</text>
   <circle cx="500" cy="195" r="70" fill="#333" stroke="#666" stroke-width="2"/>
   <text x="500" y="200" fill="#777" font-size="13" text-anchor="middle">ball</text>
-  <line x1="500" y1="195" x2="500.0" y2="99.0" stroke="#9cf" stroke-width="4" marker-end="url(#up)"/>
-  <text x="500.0" y="88.0" fill="#9cf" font-size="14" font-weight="bold" text-anchor="middle">上</text>
+  <line x1="500" y1="195" x2="596.0" y2="195.0" stroke="#9cf" stroke-width="4" marker-end="url(#up)"/>
+  <text x="612.0" y="200.0" fill="#9cf" font-size="14" font-weight="bold" text-anchor="middle">上</text>
     <rect x="560" y="90" width="110" height="70" rx="8" fill="#2a2a2a" stroke="#555"/>
   <text x="615" y="108" fill="#888" font-size="12" text-anchor="middle">03</text>
   <text x="615" y="137" fill="#fff" font-size="15" text-anchor="middle">ボールスクロール</text>

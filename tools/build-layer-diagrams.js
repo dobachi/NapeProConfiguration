@@ -54,15 +54,17 @@ function box(x, y, w, h, title, label) {
   <text x="${x + w / 2}" y="${y + h / 2 + 12}" fill="#fff" font-size="15" text-anchor="middle">${esc(label)}</text>`;
 }
 
-// 回転角に応じた「上方向」マーカー。0°=画面上、時計回りに回転（90°=右,180°=下,270°=左）。
+// 回転角に応じた「上方向」マーカー（実機確認済み）。
+// 0°=右(03/04側), 90°=上(01/03側), 180°=左(01/02側), 270°=下(02/04側)。角度増加で反時計回り。
 function upArrow(oriRaw) {
   if (typeof oriRaw !== 'number') return '';
   const cx = 500, cy = 195, len = 96;
   const rad = oriRaw * 45 * Math.PI / 180;
-  const tx = cx + len * Math.sin(rad);
-  const ty = cy - len * Math.cos(rad);
-  const lx = cx + (len + 16) * Math.sin(rad);
-  const ly = cy - (len + 16) * Math.cos(rad);
+  const dx = Math.cos(rad), dy = -Math.sin(rad);
+  const tx = cx + len * dx;
+  const ty = cy + len * dy;
+  const lx = cx + (len + 16) * dx;
+  const ly = cy + (len + 16) * dy;
   return `<line x1="${cx}" y1="${cy}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="#9cf" stroke-width="4" marker-end="url(#up)"/>
   <text x="${lx.toFixed(1)}" y="${(ly + 5).toFixed(1)}" fill="#9cf" font-size="14" font-weight="bold" text-anchor="middle">上</text>`;
 }
