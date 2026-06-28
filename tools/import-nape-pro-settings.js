@@ -114,19 +114,76 @@
     console.log('  DPI完了');
   }
 
-  // ---- 4. rawSettings 書き込み (combos/gesture/tapholds/profile) ----
-  if (data.rawSettings) {
-    // GET→SET コマンドマッピング
-    const setMap = { 0x28: 0x27, 0x2a: 0x29, 0x26: 0x25, 0x2c: 0x2b };
-    for (const [key, raw] of Object.entries(data.rawSettings)) {
-      if (!raw || raw.length < 2) continue;
-      const getCmd = raw[1];
-      const setCmd = setMap[getCmd];
-      if (!setCmd) continue;
-      // データ部 (先頭2バイトを除く) をSETコマンドで送信
-      await sendCmd([0xa7, setCmd, ...raw.slice(2)]);
-      console.log(`  ${key} 完了`);
+  // ---- 4a. combos 書き込み (index 0〜29) ----
+  // SET_COMBOS=0x27, GET=0x28, DEL=0x2e。新データを 0..N-1 に上書きし、余剰は降順に削除。
+  if (Array.isArray(data.combos)) {
+    console.log('combos を書き込み中...');
+    // 無応答 or cols==0 で打ち切る GET（現在の登録件数 N_old を数える）
+    const readCombo = (index) => new Promise((resolve) => {
+      const buf = new Uint8Array(32).fill(0); buf[0] = 0xa7; buf[1] = 0x28; buf[2] = index;
+      const h = (e) => { const r = new Uint8Array(e.data.buffer);
+        if (r[0] === 0xa7 && r[1] === 0x28) { dev.removeEventListener('inputreport', h); resolve(r); } };
+      dev.addEventListener('inputreport', h);
+      setTimeout(() => { dev.removeEventListener('inputreport', h); resolve(null); }, 500);
+      dev.sendReport(0, buf).catch(() => resolve(null));
+    });
+    let nOld = 0;
+    for (let i = 0; i < 30; i++) { const r = await readCombo(i); if (!r || r[6] === 0) break; nOld++; }
+    for (let i = 0; i < data.combos.length && i < 30; i++) {
+      const c = data.combos[i];
+      const to = c.timeout != null ? c.timeout : 200;
+      await sendCmd([0xa7, 0x27, i, to & 0xff, (to >> 8) & 0xff, c.layer, c.cols,
+        c.tap & 0xff, (c.tap >> 8) & 0xff, c.held & 0xff, (c.held >> 8) & 0xff]);
     }
+    // 余剰エントリを高インデックスから降順に削除（削除でシフトダウンするため）。
+    for (let i = nOld - 1; i >= data.combos.length; i--) {
+      await sendCmd([0xa7, 0x2e, i]);
+    }
+    console.log(`  combos 完了（${data.combos.length}件）`);
+  }
+
+  // ---- 4b. tap-hold 書き込み ((layer,col) アドレス) ----
+  // SET_TAPHOLDS=0x25, DEL=0x2f。ファイルにある座標は SET、無い座標は DEL でクリア。
+  if (Array.isArray(data.tapholds)) {
+    console.log('tap-hold を書き込み中...');
+    const map = new Map(data.tapholds.map((t) => [t.layer + ',' + t.col, t]));
+    const layers = data.layerCount || 9;
+    for (let layer = 0; layer < layers; layer++) {
+      for (let col = 0; col < 6; col++) {
+        const t = map.get(layer + ',' + col);
+        // 現在値を読み、変更が必要なときだけ書く（無駄打ち削減）。
+        const cur = await sendCmd([0xa7, 0x26, layer, 0, col]);
+        const curTap = cur[5] | (cur[6] << 8), curHeld = cur[7] | (cur[8] << 8);
+        if (t && (t.tap || t.held)) {
+          if (t.tap !== curTap || t.held !== curHeld) {
+            await sendCmd([0xa7, 0x25, layer, 0, col, t.tap & 0xff, (t.tap >> 8) & 0xff, t.held & 0xff, (t.held >> 8) & 0xff]);
+          }
+        } else if (curTap || curHeld) {
+          await sendCmd([0xa7, 0x2f, layer, 0, col]); // クリア
+        }
+      }
+    }
+    console.log(`  tap-hold 完了（${data.tapholds.length}件）`);
+  }
+
+  // ---- 4c. gesture 書き込み (1フレーム4方向) ----
+  if (data.gesture) {
+    const g = data.gesture;
+    await sendCmd([0xa7, 0x29, g.up & 0xff, (g.up >> 8) & 0xff, g.down & 0xff, (g.down >> 8) & 0xff,
+      g.left & 0xff, (g.left >> 8) & 0xff, g.right & 0xff, (g.right >> 8) & 0xff]);
+    console.log('  gesture 完了');
+  }
+
+  // ---- 4d. 旧形式 (v1.2 以前の rawSettings) フォールバック ----
+  if (data.rawSettings && !data.combos) {
+    const setMap = { 0x28: 0x27, 0x2a: 0x29, 0x26: 0x25 };
+    for (const raw of Object.values(data.rawSettings)) {
+      if (!raw || raw.length < 2) continue;
+      const setCmd = setMap[raw[1]];
+      if (!setCmd) continue;
+      await sendCmd([0xa7, setCmd, ...raw.slice(2)]);
+    }
+    console.log('  旧形式 rawSettings を書き戻し（1フレームのみ）');
   }
 
   // ---- 5. 回転角出力 (orientation) 書き込み ----

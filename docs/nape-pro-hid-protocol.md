@@ -120,18 +120,53 @@ Nape 独自コマンドは第1バイト `0xA7`（=167, `KC_MISC_CMD_GROUP`）＋
 
 5 段階（level 0〜4）。例: 400/800/1600/3200/4000。
 
-### 3.3 combos / gesture / tapholds / profile（raw bytes）
+### 3.3 combos（同時押し）— インデックス反復（最大30件）
 
-GET で 32 バイトをそのまま取得し、先頭 2 バイト（`[167, get_sub]`）を除いたデータ部を SET で送り返す。
+GET=0x28 / SET=0x27 / DEL=0x2e。**1フレーム=1件**。全件一括取得は無く、index を 0〜29 で反復する。
 
-| 設定 | GET | SET |
-|------|----:|----:|
-| combos | 40 / 0x28 | 39 / 0x27 |
-| gesture | 42 / 0x2a | 41 / 0x29 |
-| tapholds | 38 / 0x26 | 37 / 0x25 |
-| profile | 44 / 0x2c | 43 / 0x2b |
+| 操作 | パケット | 応答（GET）|
+|------|----------|-----------|
+| 取得 | `[167, 40, index]` | 下表 |
+| 設定 | `[167, 39, index, to_lo, to_hi, layer, cols, tap_lo, tap_hi, held_lo, held_hi]` | — |
+| 削除 | `[167, 46, index]` | — |
 
-SET パケット = `[167, set_sub, ...getResponse.slice(2)]`。
+GET 応答: `[2]=index, [3,4]=timeout(LE,ms), [5]=layer, [6]=cols, [7,8]=tap(LE), [9,10]=held(LE)`。
+
+- **読み取り**: index を 0 から増やし、`cols==0` または **500ms 無応答**で打ち切り（以降は未登録）。最大 30 件。
+- **cols** はトリガー列のビットマスク（`bit N = col N`）。col↔ボタン: `0=03, 1=04, 2=01, 3=02, 4=M1, 5=M2`。
+  例: `cols=5(0b101)` → col0(03) + col2(01) の同時押し。`cols=0x0F` は anti-ghosting でブロック。
+- **timeout**: 同時押し判定の猶予（既定 200ms）。`tap`=出力キーコード、`held`=長押し出力（0=なし）。
+- **削除はシフトダウン**（index N+1 が N に詰まる）。複数削除は**高い index から降順**に。
+- インポート手順: 新データを index 0..N_new-1 に SET → 余剰（N_old>N_new）を降順 DEL。
+
+> 参考フレーム `[167,40,0,200,0,0,5,70,0,0,…]` = index0 / timeout200ms / layer0 / cols=5(03+01) /
+> tap=0x46(Print Screen) / held=0 →「レイヤ0で 03+01 同時押し=Print Screen」。
+
+### 3.3b tap-hold（タップ&ホールド）— (layer,col) アドレス
+
+GET=0x26 / SET=0x25 / DEL=0x2f。スロット番号ではなく**物理キー座標**でアドレスする。
+
+| 操作 | パケット | 応答（GET）|
+|------|----------|-----------|
+| 取得 | `[167, 38, layer, 0, col]` | `[2]=layer, [3]=row(0), [4]=col, [5,6]=tap(LE), [7,8]=held(LE)` |
+| 設定 | `[167, 37, layer, 0, col, tap_lo, tap_hi, held_lo, held_hi]` | — |
+| 削除 | `[167, 47, layer, 0, col]` | — |
+
+- col は 0〜5（combos と同じ col↔ボタン対応）。GET は常に応答（未設定は tap=held=0）。
+- 削除はシフトしない（座標アドレスのため）。
+
+### 3.3c gesture（ボールジェスチャ）— 単一フレーム
+
+GET=0x2a / SET=0x29。4 方向を 1 フレームで読み書き（インデックス無し）。
+
+| 操作 | パケット |
+|------|----------|
+| 取得 | `[167, 42]` → 応答 `[2,3]=up, [4,5]=down, [6,7]=left, [8,9]=right`（各 LE u16）|
+| 設定 | `[167, 41, up_lo, up_hi, down_lo, down_hi, left_lo, left_hi, right_lo, right_hi]` |
+
+### 3.3d profile
+
+GET=0x2c / SET=0x2b は enum 定義のみで、**Launcher v1.3.8 では未実装**（対応サービスなし）。本ツールは扱わない。
 
 ### 3.4 常時ジェスチャー/スクロールモード
 
@@ -252,16 +287,17 @@ Nape Pro は row=0, col=0〜6（7 スロット）、layer=0〜8。
 - **スリープ**: LE u16。0 は「無効」の可能性。未変更フィールドは GET 値を流用。
 - **ポーリング**: UI 範囲（125/500/1000Hz = index 6/4/3）外は公式保証外。
 - **常時モード**: gesture と scroll を同時に 1 にしない。
+- **combos**: 最大 30 件。`cols=0x0F` は anti-ghosting でブロック。余剰削除は降順 DEL。
 - **保存コマンドは送らない**（即時永続のため）。
 - 書き込み前に必ずフルエクスポートでバックアップを取る。
 
 ---
 
-## 7. エクスポート JSON スキーマ（v1.2）
+## 7. エクスポート JSON スキーマ（v1.3）
 
 ```jsonc
 {
-  "version": "1.2",
+  "version": "1.3",
   "device": "Keychron Nape Pro",
   "exportDate": "ISO8601",
   "firmware": "…",
@@ -271,7 +307,9 @@ Nape Pro は row=0, col=0〜6（7 スロット）、layer=0〜8。
   "encoders": [{ "ccw": kc, "cw": kc }, …],
   "dpi": { "currentLevel": n, "levels": [{ "level": n, "dpi": n }, …] },
   "orientation": { "global": 0-7, "perLayer": [0-7, …] },   // ×45=度
-  "rawSettings": { "combos": [..32], "gesture": [..], "tapholds": [..], "profile": [..] },
+  "combos": [{ "index": n, "timeout": ms, "layer": n, "cols": bitmask, "tap": kc, "held": kc }, …],
+  "tapholds": [{ "layer": n, "col": 0-5, "tap": kc, "held": kc }, …],
+  "gesture": { "up": kc, "down": kc, "left": kc, "right": kc },
   "deviceSettings": {
     "alwaysGesture": 0|1, "alwaysScroll": 0|1,
     "sleepBacklightSec": n, "sleepSec": n, "sleepMagnetScanSec": n,
@@ -281,8 +319,9 @@ Nape Pro は row=0, col=0〜6（7 スロット）、layer=0〜8。
 }
 ```
 
-インポートで復元する範囲: keymap / encoders / dpi / orientation / rawSettings / deviceSettings。
-`battery` は参照情報のため書き戻さない。
+インポートで復元する範囲: keymap / encoders / dpi / orientation / combos / tapholds / gesture / deviceSettings。
+`battery` は参照情報のため書き戻さない。profile は未実装のため対象外。
+v1.2 以前の `rawSettings` 形式もインポートは後方互換で読める（1フレームのみ）。
 
 ---
 
@@ -291,3 +330,5 @@ Nape Pro は row=0, col=0〜6（7 スロット）、layer=0〜8。
 - v1.0: keymap / encoders / dpi / rawSettings
 - v1.1: orientation（回転角）追加
 - v1.2: deviceSettings（常時モード・スリープ・ポーリング）追加、battery を参照情報として分離
+- v1.3: combos を全件インデックス反復（最大30件）に、tap-hold を (layer,col) 全件に、gesture を構造化。
+  旧 `rawSettings`（1フレーム）を廃し構造化フィールドへ（profile は未実装のため除外）

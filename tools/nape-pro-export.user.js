@@ -97,8 +97,36 @@
     const batRaw    = await sendCmd([0xa7, 0x31]);
     const pollIndex = pollRaw[6];
 
+    // combos: index 0〜29 を反復取得（cols==0 か 500ms 無応答で打ち切り）。
+    const readCombo = (index) => new Promise((resolve) => {
+      const buf = new Uint8Array(32).fill(0); buf[0] = 0xa7; buf[1] = 0x28; buf[2] = index;
+      const h = (e) => { const r = new Uint8Array(e.data.buffer);
+        if (r[0] === 0xa7 && r[1] === 0x28) { dev.removeEventListener('inputreport', h); resolve(r); } };
+      dev.addEventListener('inputreport', h);
+      setTimeout(() => { dev.removeEventListener('inputreport', h); resolve(null); }, 500);
+      dev.sendReport(0, buf).catch(() => resolve(null));
+    });
+    const combos = [];
+    for (let i = 0; i < 30; i++) {
+      const r = await readCombo(i);
+      if (!r || r[6] === 0) break;
+      combos.push({ index: r[2], timeout: r[3] | (r[4] << 8), layer: r[5], cols: r[6],
+        tap: r[7] | (r[8] << 8), held: r[9] | (r[10] << 8) });
+    }
+    const tapholds = [];
+    for (let layer = 0; layer < layerCount; layer++) {
+      for (let col = 0; col < 6; col++) {
+        const r = await sendCmd([0xa7, 0x26, layer, 0, col]);
+        const tap = r[5] | (r[6] << 8), held = r[7] | (r[8] << 8);
+        if (tap !== 0 || held !== 0) tapholds.push({ layer, col, tap, held });
+      }
+    }
+    const gRaw = await sendCmd([0xa7, 0x2a]);
+    const gesture = { up: gRaw[2] | (gRaw[3] << 8), down: gRaw[4] | (gRaw[5] << 8),
+      left: gRaw[6] | (gRaw[7] << 8), right: gRaw[8] | (gRaw[9] << 8) };
+
     const exportData = {
-      version: '1.2',
+      version: '1.3',
       device: 'Keychron Nape Pro',
       exportDate: new Date().toISOString(),
       firmware,
@@ -108,12 +136,9 @@
       encoders,
       dpi: { currentLevel: dpiCurrentLevel, levels: dpiLevels },
       orientation: { global: globalOri, perLayer: layerOri },
-      rawSettings: {
-        combos:   Array.from(await sendCmd([0xa7, 0x28])),
-        gesture:  Array.from(await sendCmd([0xa7, 0x2a])),
-        tapholds: Array.from(await sendCmd([0xa7, 0x26])),
-        profile:  Array.from(await sendCmd([0xa7, 0x2c]))
-      },
+      combos,
+      tapholds,
+      gesture,
       deviceSettings: {
         alwaysGesture: alwaysRaw[2],
         alwaysScroll:  alwaysRaw[3],
@@ -188,13 +213,56 @@
       }
       await sendCmd([0xa7, 0x22, data.dpi.currentLevel]);
     }
-    if (data.rawSettings) {
-      const setMap = { 0x28: 0x27, 0x2a: 0x29, 0x26: 0x25, 0x2c: 0x2b };
-      for (const [, raw] of Object.entries(data.rawSettings)) {
+    // combos (index 0〜29: SET=0x27 / DEL=0x2e)
+    if (Array.isArray(data.combos)) {
+      const readCombo = (index) => new Promise((resolve) => {
+        const buf = new Uint8Array(32).fill(0); buf[0] = 0xa7; buf[1] = 0x28; buf[2] = index;
+        const h = (e) => { const r = new Uint8Array(e.data.buffer);
+          if (r[0] === 0xa7 && r[1] === 0x28) { dev.removeEventListener('inputreport', h); resolve(r); } };
+        dev.addEventListener('inputreport', h);
+        setTimeout(() => { dev.removeEventListener('inputreport', h); resolve(null); }, 500);
+        dev.sendReport(0, buf).catch(() => resolve(null));
+      });
+      let nOld = 0;
+      for (let i = 0; i < 30; i++) { const r = await readCombo(i); if (!r || r[6] === 0) break; nOld++; }
+      for (let i = 0; i < data.combos.length && i < 30; i++) {
+        const c = data.combos[i]; const to = c.timeout != null ? c.timeout : 200;
+        await sendCmd([0xa7, 0x27, i, to & 0xff, (to >> 8) & 0xff, c.layer, c.cols,
+          c.tap & 0xff, (c.tap >> 8) & 0xff, c.held & 0xff, (c.held >> 8) & 0xff]);
+      }
+      for (let i = nOld - 1; i >= data.combos.length; i--) await sendCmd([0xa7, 0x2e, i]);
+    }
+    // tap-hold ((layer,col): SET=0x25 / DEL=0x2f)
+    if (Array.isArray(data.tapholds)) {
+      const map = new Map(data.tapholds.map((t) => [t.layer + ',' + t.col, t]));
+      const layers = data.layerCount || 9;
+      for (let layer = 0; layer < layers; layer++) {
+        for (let col = 0; col < 6; col++) {
+          const t = map.get(layer + ',' + col);
+          const cur = await sendCmd([0xa7, 0x26, layer, 0, col]);
+          const curTap = cur[5] | (cur[6] << 8), curHeld = cur[7] | (cur[8] << 8);
+          if (t && (t.tap || t.held)) {
+            if (t.tap !== curTap || t.held !== curHeld)
+              await sendCmd([0xa7, 0x25, layer, 0, col, t.tap & 0xff, (t.tap >> 8) & 0xff, t.held & 0xff, (t.held >> 8) & 0xff]);
+          } else if (curTap || curHeld) {
+            await sendCmd([0xa7, 0x2f, layer, 0, col]);
+          }
+        }
+      }
+    }
+    // gesture (1フレーム4方向: SET=0x29)
+    if (data.gesture) {
+      const g = data.gesture;
+      await sendCmd([0xa7, 0x29, g.up & 0xff, (g.up >> 8) & 0xff, g.down & 0xff, (g.down >> 8) & 0xff,
+        g.left & 0xff, (g.left >> 8) & 0xff, g.right & 0xff, (g.right >> 8) & 0xff]);
+    }
+    // 旧形式 (v1.2 以前) フォールバック
+    if (data.rawSettings && !data.combos) {
+      const setMap = { 0x28: 0x27, 0x2a: 0x29, 0x26: 0x25 };
+      for (const raw of Object.values(data.rawSettings)) {
         if (!raw || raw.length < 2) continue;
         const setCmd = setMap[raw[1]];
-        if (!setCmd) continue;
-        await sendCmd([0xa7, setCmd, ...raw.slice(2)]);
+        if (setCmd) await sendCmd([0xa7, setCmd, ...raw.slice(2)]);
       }
     }
     // 回転角出力 (SET_ORI=0x34, SET_LAYER_ORI=0x39)。値 0〜7。

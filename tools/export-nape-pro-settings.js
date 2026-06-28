@@ -87,8 +87,42 @@
 
   const pollIndex = pollRaw[6];
 
+  // combos: index 0〜29 を反復取得（cols==0 か 500ms 無応答で打ち切り）。
+  function readCombo(index) {
+    return new Promise((resolve) => {
+      const buf = new Uint8Array(32).fill(0); buf[0] = 0xa7; buf[1] = 0x28; buf[2] = index;
+      const h = (e) => { const r = new Uint8Array(e.data.buffer);
+        if (r[0] === 0xa7 && r[1] === 0x28) { dev.removeEventListener('inputreport', h); resolve(r); } };
+      dev.addEventListener('inputreport', h);
+      setTimeout(() => { dev.removeEventListener('inputreport', h); resolve(null); }, 500);
+      dev.sendReport(0, buf).catch(() => resolve(null));
+    });
+  }
+  const combos = [];
+  for (let i = 0; i < 30; i++) {
+    const r = await readCombo(i);
+    if (!r || r[6] === 0) break; // 無応答 or cols==0（未登録）→ 以降なし
+    combos.push({ index: r[2], timeout: r[3] | (r[4] << 8), layer: r[5], cols: r[6],
+      tap: r[7] | (r[8] << 8), held: r[9] | (r[10] << 8) });
+  }
+
+  // tap-hold: (layer, col) グリッドを走査し、非ゼロのみ保存。
+  const tapholds = [];
+  for (let layer = 0; layer < layerCount; layer++) {
+    for (let col = 0; col < 6; col++) {
+      const r = await sendCmd([0xa7, 0x26, layer, 0, col]);
+      const tap = r[5] | (r[6] << 8), held = r[7] | (r[8] << 8);
+      if (tap !== 0 || held !== 0) tapholds.push({ layer, col, tap, held });
+    }
+  }
+
+  // gesture: 1フレームで4方向（up/down/left/right の VIA キーコード）。
+  const gRaw = await sendCmd([0xa7, 0x2a]);
+  const gesture = { up: gRaw[2] | (gRaw[3] << 8), down: gRaw[4] | (gRaw[5] << 8),
+    left: gRaw[6] | (gRaw[7] << 8), right: gRaw[8] | (gRaw[9] << 8) };
+
   const exportData = {
-    version: '1.2',
+    version: '1.3',
     device: 'Keychron Nape Pro',
     exportDate: new Date().toISOString(),
     firmware,
@@ -99,12 +133,13 @@
     dpi: { currentLevel: dpiCurrentLevel, levels: dpiLevels },
     // 回転角出力。値は 0〜7（×45 = 度）。インポートで復元される。
     orientation: { global: globalOri, perLayer: layerOri },
-    rawSettings: {
-      combos:   Array.from(await sendCmd([0xa7, 0x28])),
-      gesture:  Array.from(await sendCmd([0xa7, 0x2a])),
-      tapholds: Array.from(await sendCmd([0xa7, 0x26])),
-      profile:  Array.from(await sendCmd([0xa7, 0x2c]))
-    },
+    // 同時押し（最大30件・インデックス反復）。cols はトリガー列のビットマスク。
+    combos,
+    // タップ&ホールド（(layer,col) アドレス、非ゼロのみ）。
+    tapholds,
+    // ボールジェスチャ（4方向のキーコード）。
+    gesture,
+    // ※ profile (0x2c) は Launcher v1.3.8 で未実装のため対象外。
     // デバイス設定（インポートで復元される）。
     deviceSettings: {
       alwaysGesture: alwaysRaw[2],   // 0/1
