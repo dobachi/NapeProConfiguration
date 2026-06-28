@@ -1,0 +1,3 @@
+[submodule "instructions/ai_instruction_kits"]
+	path = instructions/ai_instruction_kits
+	url = git@github.com:dobachi/AI_Instruction_Kits.git
