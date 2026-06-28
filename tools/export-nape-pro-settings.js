@@ -1,6 +1,8 @@
 /*
  * Keychron Nape Pro 設定エクスポートスクリプト
  *
+ * ⚠️ 非公式ツール。利用は自己責任で（詳細は ./README.md の免責事項）。
+ *
  * Keychron Launcher (https://launcher.keychron.com) を開き Nape Pro を接続した状態で、
  * ブラウザの DevTools コンソールにこのファイルの内容を貼り付けて実行する。
  * 設定が nape-pro-settings-YYYY-MM-DD.json として自動ダウンロードされる。

@@ -1,16 +1,60 @@
 # Nape Pro 設定エクスポート/インポートツール
 
+> ## ⚠️ 免責事項（必ず最初にお読みください）
+>
+> 本ツールは Keychron 公式の機能ではなく、非公式に WebHID API を直接操作するものです。
+> **利用はすべて自己責任** で行ってください。
+>
+> - デバイスの設定書き込み（インポート）に伴う設定の破損・初期化・文鎮化等の
+>   いかなる不具合についても、作者は責任を負いません。
+> - ファームウェア更新によりコマンドや構成が変わり、動作しなくなる/誤動作する可能性があります。
+> - 重要な設定は事前にエクスポートしてバックアップを取り、書き込み前に必ず保管してください。
+> - Keychron 公式サポートの対象外です。
+
 Keychron Launcher にはエクスポート/インポート機能が無いため、WebHID API を直接叩く
 ブラウザコンソール用スクリプトで設定をバックアップ/復元する。
 
 調査の詳細は [`../docs/keychron-launcher-investigation.md`](../docs/keychron-launcher-investigation.md) を参照。
+
+> **WebHID の制約**: デバイス権限は Launcher のページに紐づくため、どの方法でも
+> スクリプトは **launcher.keychron.com を開いた状態のそのページ上** で動かす必要がある。
+> ローカルの HTML ファイルや別タブからはデバイスにアクセスできない。
 
 ## 前提
 
 - Chrome / Edge など WebHID 対応ブラウザ
 - [Keychron Launcher](https://launcher.keychron.com) を開き、Nape Pro を接続済みであること
 
-## 使い方
+## おすすめ: ワンクリックで使う方法
+
+毎回コンソールに貼り付けるのが面倒な場合は、以下のどちらかを使う。
+
+### A. ブックマークレット（インストール不要）
+
+ブックマークを 1 回登録すれば、以降はクリックするだけでエクスポートできる。
+
+エクスポート用・インポート用をそれぞれブックマークとして登録する。
+
+1. ブラウザで適当なページをブックマークし、「名前」と「URL」を以下に書き換えて保存する
+   - エクスポート: 名前 `Nape Pro Export` / URL = [`export-bookmarklet.txt`](export-bookmarklet.txt) の中身（`javascript:` から始まる 1 行）
+   - インポート: 名前 `Nape Pro Import` / URL = [`import-bookmarklet.txt`](import-bookmarklet.txt) の中身
+2. Launcher を開いて Nape Pro を接続した状態で、目的のブックマークをクリック
+   - Export → `nape-pro-settings-YYYY-MM-DD.json` が自動ダウンロードされる
+   - Import → ファイル選択ダイアログで JSON を選ぶとデバイスへ書き込まれる
+
+> `*-bookmarklet.txt` は `export/import-nape-pro-settings.js` から自動生成される。
+> 元スクリプトを修正したら `node build-bookmarklet.js` で再生成すること。
+
+### B. ユーザースクリプト（Tampermonkey 等・ボタンが常時表示）
+
+[Tampermonkey](https://www.tampermonkey.net/) や Violentmonkey に
+[`nape-pro-export.user.js`](nape-pro-export.user.js) を登録すると、Launcher を開くたびに
+画面右下に **⬇ Export / ⬆ Import** ボタンが表示され、1 クリックで実行できる。
+
+1. Tampermonkey を入れて「新規スクリプト」に `nape-pro-export.user.js` の内容を貼り付けて保存
+2. Launcher を開く → 右下のボタンをクリック
+
+## 手動: コンソールに貼り付ける方法
 
 ### エクスポート
 
