@@ -129,6 +129,34 @@
     }
   }
 
+  // ---- 5. 回転角出力 (orientation) 書き込み ----
+  // 値は 0〜7（×45 = 度）。SET_ORI=0x34(全体), SET_LAYER_ORI=0x39+layer。
+  if (data.orientation) {
+    console.log('回転角を書き込み中...');
+    if (typeof data.orientation.global === 'number') {
+      await sendCmd([0xa7, 0x34, data.orientation.global]); // SET_ORI
+    }
+    const per = data.orientation.perLayer;
+    if (Array.isArray(per)) {
+      for (let layer = 0; layer < per.length; layer++) {
+        await sendCmd([0xa7, 0x39, layer, per[layer]]); // SET_LAYER_ORI
+      }
+      // 読み戻し検証
+      const bad = [];
+      for (let layer = 0; layer < per.length; layer++) {
+        const got = (await sendCmd([0xa7, 0x38, layer]))[2];
+        if (got !== per[layer]) bad.push(`Layer${layer}: 期待=${per[layer]} 実際=${got}`);
+      }
+      if (bad.length) console.warn('  ⚠️ 回転角の読み戻し不一致:', bad);
+      else console.log('  回転角 完了（検証OK）');
+    }
+  }
+
+  // 注意: deviceInfo（常時モード/スリープ/ポーリング）は SET コマンド未確定のため未対応。
+  if (data.deviceInfo) {
+    console.log('ℹ️ deviceInfo（常時モード/スリープ/ポーリング）はインポート未対応のためスキップしました。');
+  }
+
   console.log('✅ インポート完了！ Launcherの画面を確認してください。');
   alert('インポート完了！\nファイル: ' + file.name + '\nデバイスに設定が書き込まれました。');
 })();

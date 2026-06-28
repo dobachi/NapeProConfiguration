@@ -70,8 +70,23 @@
     if (val > 0) dpiLevels.push({ level: i, dpi: val });
   }
 
+  // 回転角出力 (orientation)。値 ×45 = 度 (0=0°,1=45°,…,7=315°)。
+  // GET_ORI=0x20(全体), GET_LAYER_ORI=0x38+layer(レイヤー別)。
+  const globalOri = (await sendCmd([0xa7, 0x20]))[2];
+  const layerOri = [];
+  for (let layer = 0; layer < layerCount; layer++) {
+    layerOri.push((await sendCmd([0xa7, 0x38, layer]))[2]);
+  }
+
+  // 参考情報（読み取りのみ。インポートでは復元しない）。
+  const u16le = (a, i) => (a[i + 1] << 8) | a[i];
+  const alwaysRaw = await sendCmd([0xa7, 0x33]); // 常時ジェスチャー/スクロール
+  const sleepRaw  = await sendCmd([0xa7, 0x0b]); // スリープタイマー(秒, LE u16×2)
+  const pollRaw   = await sendCmd([0xa7, 0x0d]); // ポーリングレート(Hz, LE u16×2)
+  const batRaw    = await sendCmd([0xa7, 0x31]); // バッテリー
+
   const exportData = {
-    version: '1.0',
+    version: '1.1',
     device: 'Keychron Nape Pro',
     exportDate: new Date().toISOString(),
     firmware,
@@ -80,11 +95,22 @@
     keymap,
     encoders,
     dpi: { currentLevel: dpiCurrentLevel, levels: dpiLevels },
+    // 回転角出力。値は 0〜7（×45 = 度）。インポートで復元される。
+    orientation: { global: globalOri, perLayer: layerOri },
     rawSettings: {
       combos:   Array.from(await sendCmd([0xa7, 0x28])),
       gesture:  Array.from(await sendCmd([0xa7, 0x2a])),
       tapholds: Array.from(await sendCmd([0xa7, 0x26])),
       profile:  Array.from(await sendCmd([0xa7, 0x2c]))
+    },
+    // 参考情報（インポート非対応）。SET コマンド未確定のため復元しない。
+    deviceInfo: {
+      alwaysGesture: !!(alwaysRaw[2] & 0x01),
+      alwaysScroll:  !!(alwaysRaw[2] & 0x02),
+      sleepTimerSec: [u16le(sleepRaw, 3), u16le(sleepRaw, 5)],
+      pollingRateHz: [u16le(pollRaw, 3), u16le(pollRaw, 5)],
+      batteryPercent: batRaw[2],
+      charging: batRaw[3] === 1
     }
   };
 

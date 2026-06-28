@@ -83,8 +83,21 @@
       if (val > 0) dpiLevels.push({ level: i, dpi: val });
     }
 
+    // 回転角出力 (値 ×45 = 度)。GET_ORI=0x20(全体), GET_LAYER_ORI=0x38+layer。
+    const globalOri = (await sendCmd([0xa7, 0x20]))[2];
+    const layerOri = [];
+    for (let layer = 0; layer < layerCount; layer++) {
+      layerOri.push((await sendCmd([0xa7, 0x38, layer]))[2]);
+    }
+    // 参考情報（読み取りのみ・インポート未対応）
+    const u16le = (a, i) => (a[i + 1] << 8) | a[i];
+    const alwaysRaw = await sendCmd([0xa7, 0x33]);
+    const sleepRaw  = await sendCmd([0xa7, 0x0b]);
+    const pollRaw   = await sendCmd([0xa7, 0x0d]);
+    const batRaw    = await sendCmd([0xa7, 0x31]);
+
     const exportData = {
-      version: '1.0',
+      version: '1.1',
       device: 'Keychron Nape Pro',
       exportDate: new Date().toISOString(),
       firmware,
@@ -93,11 +106,20 @@
       keymap,
       encoders,
       dpi: { currentLevel: dpiCurrentLevel, levels: dpiLevels },
+      orientation: { global: globalOri, perLayer: layerOri },
       rawSettings: {
         combos:   Array.from(await sendCmd([0xa7, 0x28])),
         gesture:  Array.from(await sendCmd([0xa7, 0x2a])),
         tapholds: Array.from(await sendCmd([0xa7, 0x26])),
         profile:  Array.from(await sendCmd([0xa7, 0x2c]))
+      },
+      deviceInfo: {
+        alwaysGesture: !!(alwaysRaw[2] & 0x01),
+        alwaysScroll:  !!(alwaysRaw[2] & 0x02),
+        sleepTimerSec: [u16le(sleepRaw, 3), u16le(sleepRaw, 5)],
+        pollingRateHz: [u16le(pollRaw, 3), u16le(pollRaw, 5)],
+        batteryPercent: batRaw[2],
+        charging: batRaw[3] === 1
       }
     };
 
@@ -170,6 +192,24 @@
         const setCmd = setMap[raw[1]];
         if (!setCmd) continue;
         await sendCmd([0xa7, setCmd, ...raw.slice(2)]);
+      }
+    }
+    // 回転角出力 (SET_ORI=0x34, SET_LAYER_ORI=0x39)。値 0〜7。
+    if (data.orientation) {
+      if (typeof data.orientation.global === 'number') {
+        await sendCmd([0xa7, 0x34, data.orientation.global]);
+      }
+      const per = data.orientation.perLayer;
+      if (Array.isArray(per)) {
+        for (let layer = 0; layer < per.length; layer++) {
+          await sendCmd([0xa7, 0x39, layer, per[layer]]);
+        }
+        const bad = [];
+        for (let layer = 0; layer < per.length; layer++) {
+          const got = (await sendCmd([0xa7, 0x38, layer]))[2];
+          if (got !== per[layer]) bad.push(`Layer${layer}:${per[layer]}→${got}`);
+        }
+        if (bad.length) console.warn('回転角の読み戻し不一致:', bad);
       }
     }
     alert('インポート完了！\nファイル: ' + file.name);
