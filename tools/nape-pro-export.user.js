@@ -26,6 +26,15 @@
     );
   }
 
+  // Keychron Launcher のバージョンをページから best-effort で取得（HIDでは取れない）。
+  function getLauncherVersion() {
+    try {
+      const text = (document.body && document.body.innerText) || '';
+      const m = text.match(/Launcher\s*V?\s*(\d+\.\d+\.\d+)/i) || text.match(/\bV(\d+\.\d+\.\d+)\b/);
+      return m ? m[1] : null;
+    } catch (e) { return null; }
+  }
+
   function makeSendCmd(dev) {
     return function sendCmd(bytes) {
       const buf = new Uint8Array(32).fill(0);
@@ -46,6 +55,7 @@
 
     const fwResp = await sendCmd([0xa1]);
     const firmware = fwResp.slice(1).filter(b => b > 0).map(b => String.fromCharCode(b)).join('');
+    const launcherVersion = getLauncherVersion();
     const layerCount = (await sendCmd([0x11]))[1];
 
     const keymap = [];
@@ -78,6 +88,7 @@
       device: 'Keychron Nape Pro',
       exportDate: new Date().toISOString(),
       firmware,
+      launcherVersion,
       layerCount,
       keymap,
       encoders,
@@ -116,6 +127,22 @@
     const dev = await findDevice();
     if (!dev) { alert('Nape Pro が見つかりません。Launcherで接続してください。'); return; }
     const sendCmd = makeSendCmd(dev);
+
+    // バージョン照合 (書き込み前)
+    const curFwResp = await sendCmd([0xa1]);
+    const curFirmware = curFwResp.slice(1).filter(b => b > 0).map(b => String.fromCharCode(b)).join('');
+    const curLauncher = getLauncherVersion();
+    const mismatches = [];
+    if (data.firmware && curFirmware && data.firmware !== curFirmware) {
+      mismatches.push(`ファームウェア: ファイル=${data.firmware} / 現在=${curFirmware}`);
+    }
+    if (data.launcherVersion && curLauncher && data.launcherVersion !== curLauncher) {
+      mismatches.push(`Launcher: ファイル=${data.launcherVersion} / 現在=${curLauncher}`);
+    }
+    if (mismatches.length && !confirm(
+      'バージョンが一致しません。コマンド構成が異なる可能性があります。\n\n' +
+      mismatches.join('\n') + '\n\nそれでも書き込みを続行しますか？'
+    )) { console.log('インポートを中止しました。'); return; }
 
     for (let layer = 0; layer < data.keymap.length; layer++) {
       for (let col = 0; col < data.keymap[layer].length; col++) {

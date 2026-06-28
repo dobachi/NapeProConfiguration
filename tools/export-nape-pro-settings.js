@@ -30,8 +30,19 @@
     });
   }
 
+  // Keychron Launcher のバージョンをページから best-effort で取得（HIDでは取れないため）。
+  // Launcher 側の DOM 変更で取得できなくなる可能性あり。取れない場合は null。
+  function getLauncherVersion() {
+    try {
+      const text = (document.body && document.body.innerText) || '';
+      const m = text.match(/Launcher\s*V?\s*(\d+\.\d+\.\d+)/i) || text.match(/\bV(\d+\.\d+\.\d+)\b/);
+      return m ? m[1] : null;
+    } catch (e) { return null; }
+  }
+
   const fwResp = await sendCmd([0xa1]);
   const firmware = fwResp.slice(1).filter(b => b > 0).map(b => String.fromCharCode(b)).join('');
+  const launcherVersion = getLauncherVersion();
   const layerCount = (await sendCmd([0x11]))[1];
 
   const keymap = [];
@@ -64,6 +75,7 @@
     device: 'Keychron Nape Pro',
     exportDate: new Date().toISOString(),
     firmware,
+    launcherVersion,
     layerCount,
     keymap,
     encoders,
@@ -86,6 +98,7 @@
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 
+  console.log(`Firmware: ${firmware} / Launcher: ${launcherVersion || '不明'}`);
   console.log('エクスポート完了!', exportData);
   return exportData;
 })();
