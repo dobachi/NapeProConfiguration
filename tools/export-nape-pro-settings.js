@@ -23,7 +23,13 @@
     const buf = new Uint8Array(32).fill(0);
     bytes.forEach((b, i) => buf[i] = b);
     return new Promise((resolve, reject) => {
-      const h = (e) => { dev.removeEventListener('inputreport', h); resolve(new Uint8Array(e.data.buffer)); };
+      const h = (e) => {
+        const r = new Uint8Array(e.data.buffer);
+        // 応答をコマンドのエコーで照合（Launcher のバックグラウンド通信を無視）
+        if (r[0] !== buf[0]) return;
+        if (buf[0] === 0xa7 && r[1] !== buf[1]) return;
+        dev.removeEventListener('inputreport', h); resolve(r);
+      };
       dev.addEventListener('inputreport', h);
       setTimeout(() => { dev.removeEventListener('inputreport', h); reject(new Error('timeout')); }, 3000);
       dev.sendReport(0, buf).catch(reject);
